@@ -27,6 +27,9 @@ class Ensemble(object):
 
     def add_member(self,member):
         self._members.append(member)
+        
+    def remove_member(self,member):
+        self._members.remove(member)
 
     def add_mf(self,mf,prefix,nextnum=None):
         ds = xr.open_dataset(self._basefile,decode_times=False)

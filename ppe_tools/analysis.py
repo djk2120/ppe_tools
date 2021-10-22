@@ -4,6 +4,8 @@ import xarray as xr
 import cftime
 import pandas as pd
 import matplotlib
+import matplotlib.pyplot as plt
+import glob
 
 def get_ensemble(files,data_vars,keys,paramkey,p=True,extras=[]):
 
@@ -50,7 +52,7 @@ def get_ensemble(files,data_vars,keys,paramkey,p=True,extras=[]):
 
     return ds
 
-def calc_mean(ds,ens_name,datavar,la,domain='global'):
+def calc_mean(ds,ens_name,datavar,la,cfs,units,domain='global'):
 
     preload = './data/'+ens_name+'_'+datavar+'_'+domain+'.nc'
 
@@ -64,7 +66,7 @@ def calc_mean(ds,ens_name,datavar,la,domain='global'):
             if domain=='global':
                 cf = 1/la.sum()/365
             else:
-                cf = 1/lab.groupby('biome').sum()/365
+                cf = 1/la.groupby(ds.biome).sum()/365
 
         # weight by landarea
         x = la*ds[datavar]
@@ -93,8 +95,13 @@ def calc_mean(ds,ens_name,datavar,la,domain='global'):
         out[datavar+'_mean'].attrs= {'units':units[datavar]}
         out[datavar+'_iav']  = iav
         out[datavar+'_iav'].attrs= {'units':units[datavar]}
-        out['param']  = dsb.param
-        out['minmax'] = dsb.minmax
+        out['param']  = ds.param
+        out['minmax'] = ds.minmax
+        
+        if domain=='biome':
+            out['biome_name']=ds.biome_name
+        
+        
         out.load().to_netcdf(preload)
         
     #load from disk
@@ -192,6 +199,27 @@ def top_n(da,nx,params,minmax,uniques=[]):
     
     return xmins,xmaxs,pvals
 
+def rank_plot(da,ds,nx,ll=True,title=None,xlabel=None):
+    xmins,xmaxs,pvals = top_n(da,nx,ds.param,ds.minmax)
+    xdef = da.isel(ens=0)
+    plt.plot([xdef,xdef],[0,nx-1],'k:',label='default')
+    plt.scatter(xmins,range(nx),marker='o',facecolors='none', edgecolors='r',label='low-val')
+    plt.plot(xmaxs,range(nx),'ro',label='high-val')
+    
+    if ll:
+        plt.legend(loc=3)
+    i=-1
+    for xmin,xmax in zip(xmins,xmaxs):
+        i+=1
+        plt.plot([xmin,xmax],[i,i],'r')
+    plt.yticks(range(nx),pvals)
+    if not xlabel:
+        xlabel = da.name+' ['+da.attrs['units']+']'
+    if not title:
+        title = da.name
+    plt.xlabel(xlabel)
+    plt.title(title);
+
 def brown_green():
     '''
     returns a colormap based on colorbrewer diverging brown->green
@@ -213,76 +241,3 @@ def brown_green():
     cmap = matplotlib.colors.ListedColormap(cmap/256)
     
     return cmap
-
-def parse_val(loc,defval,thisval,sgn=1):
-    '''
-    Parse the value to be used to set a new parameter value
-
-    Parameters
-    ----------
-    loc : str
-        Flag for whether the parameter can be found on the paramfile (\'P\') 
-        or within the namelist (\'N\')
-        Should be either \'P\' or \'N\'
-    defval : numpy array
-        The default value of the given parameter
-    thisval : str, float, numpy array
-        The input value that will be parsed.
-        Contains special logic to apply percent perturbations:
-            e.g. thisval=\'30percent\' will apply a 30 percent increase to defval
-            Must contain the exact word \'percent\'
-    sgn : integer, optional
-        Integer that can be used to modify the sign of a percent perturbation.
-        e.g. thisval=\'30percent\' along with sgn=-1 will apply a 30 percent REDUCTION to defval
-
-    Returns
-    -------
-    value : float or numpy array
-        The new parameter value correctly formatted to match either the paramfile or nlfile format
-    '''
-
-    if 'percent' in str(thisval):
-        #logic to handle percent perturbations
-        prcnt = float(thisval.split("percent")[0])
-        value = defval+sgn*prcnt/100*defval
-    elif loc=='N':
-        #no work needed for other nl cases
-        value = thisval
-    elif not thisval.shape:
-        #handles float/integer inputs
-        if not defval.shape:
-            #thisval and defval shape match, no work
-            value=thisval
-        else:
-            #thisval and defval shape mismatch, populate new array with defval
-            value=np.zeros(defval.shape)
-            value[:]=thisval
-    elif thisval.shape==defval.shape:
-        #handles array inputs, when it matches defval shape
-        value = thisval
-    else:
-        #otherwise tile the input to match defval shape
-        #eg kmax,rootprof_beta
-        value = np.tile(thisval,[defval.shape[0],1])
-    return value
-
-
-def get_default(param,loc,ds,lndin):
-    """
-    return the default value for a given parameter
-    """
-    if loc=='N':
-        # search lnd_in file for the parameter by name and put output in a tmp file
-        cmd = 'grep '+param+' '+lndin
-        tmp = os.popen(cmd).read().split()[2]
-
-        # cases where scientific notation is specified by a "d"
-        if 'd' in tmp:
-            tmp = tmp.split('d')
-            x = float(tmp[0])*10**float(tmp[1])
-        else:
-            x = float(tmp)
-    else:
-        x=ds[param].values
-        
-    return x
