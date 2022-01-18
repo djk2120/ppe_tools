@@ -52,65 +52,57 @@ def get_ensemble(files,data_vars,keys,paramkey,p=True,extras=[]):
 
     return ds
 
-def calc_mean(ds,ens_name,datavar,la,cfs,units,domain='global'):
-
-    preload = './data/'+ens_name+'_'+datavar+'_'+domain+'.nc'
-
-    if not os.path.isdir('./data/'):
-        os.system('mkdir data')
+def get_map(da):
+    '''
+    Regrid from sparsegrid to standard lat/lon
     
-    #skip calculation if available on disk
-    if not glob.glob(preload):  
-        cf = cfs[datavar]  #conversion factor
-        if cf=='intrinsic':
-            if domain=='global':
-                cf = 1/la.sum()/365
-            else:
-                cf = 1/la.groupby(ds.biome).sum()/365
-
-        # weight by landarea
-        x = la*ds[datavar]
-        
-        # sort out domain groupings
-        x['biome']=ds.biome
-        x=x.swap_dims({'gridcell':'biome'})
-        if domain =='global': 
-            g = 1+0*x.biome  #every gridcell is in biome 1
-        else: 
-            g = x.biome
-        
-        # calculate annual average or sum (determined by cf)
-        xann = cf*(month_wts(10)*x.groupby(g).sum()).groupby('time.year').sum().compute()
-
-        if domain =='global': 
-            xann = xann.mean(dim='biome')  #get rid of gridcell dimension   
-
-        #average/iav
-        xm  = xann.mean(dim='year') 
-        iav = xann.std(dim='year')
-
-        #save the reduced data
-        out = xr.Dataset()
-        out[datavar+'_mean'] = xm
-        out[datavar+'_mean'].attrs= {'units':units[datavar]}
-        out[datavar+'_iav']  = iav
-        out[datavar+'_iav'].attrs= {'units':units[datavar]}
-        out['param']  = ds.param
-        out['minmax'] = ds.minmax
-        
-        if domain=='biome':
-            out['biome_name']=ds.biome_name
-        
-        
-        out.load().to_netcdf(preload)
-        
-    #load from disk
-    ds  = xr.open_dataset(preload)
-    xm  = ds[datavar+'_mean']
-    iav = ds[datavar+'_iav']
+    Better to do any dimension-reducing math before calling this function. 
+    Could otherwise be pretty slow...
+    '''
     
-    return xm,iav
+    #ACCESS the sparsegrid info
+    thedir  = '/glade/u/home/forrest/ppe_representativeness/output_v4/'
+    thefile = 'clusters.clm51_PPEn02ctsm51d021_2deg_GSWP3V1_leafbiomassesai_PPE3_hist.annual+sd.400.nc'
+    sg = xr.open_dataset(thedir+thefile)
     
+    #DIAGNOSE the shape of the output map
+    newshape = []
+    coords=[]
+    #  grab any dimensions that arent "gridcell" from da
+    for coord,nx in zip(da.coords,da.shape):
+        if nx!=400:
+            newshape.append(nx)
+            coords.append((coord,da[coord].values))
+    #  grab lat/lon from sg
+    for coord in ['lat','lon']:
+        nx = len(sg[coord])
+        newshape.append(nx)
+        coords.append((coord,sg[coord].values))
+
+    #INSTANTIATE the outgoing array
+    array = np.zeros(newshape)+np.nan
+    nd    = len(array.shape)
+    
+    #FILL the array
+    ds = xr.open_dataset('/glade/scratch/djk2120/PPEn11/hist/CTL2010/PPEn11_CTL2010_OAAT0399.clm2.h0.2005-02-01-00000.nc')
+    for i in range(400):
+        lat=ds.grid1d_lat[i]
+        lon=ds.grid1d_lon[i]
+        cc = sg.rcent.sel(lat=lat,lon=lon,method='nearest')
+        ix = sg.cclass==cc
+        
+        
+        if nd==2:
+            array[ix]=da.isel(gridcell=i)
+        else:
+            nx = ix.sum().values
+            array[:,ix]=np.tile(da.isel(gridcell=i).values[:,np.newaxis],[1,nx])
+    
+    #OUTPUT as DataArray
+    da_map = xr.DataArray(array,name=da.name,coords=coords)
+    da_map.attrs=da.attrs
+
+    return da_map
 
 def get_params(keys,paramkey):
     params=[]
@@ -128,26 +120,169 @@ def month_wts(nyears):
     days_pm  = [31,28,31,30,31,30,31,31,30,31,30,31]
     return xr.DataArray(np.tile(days_pm,nyears),dims='time')
 
-def get_cfs():
-    '''
-    loads dictionaries containing conversion factors and units
-    for globally aggregating output variables  
-    '''
+def get_lapft(la,sample_h1):
     
-    df = pd.read_csv('agg_units.csv')
-    cfs   = dict()
-    units = dict()
-    for i,row in df.iterrows():
-        f = row['field']
-        u = row['unit']
-        c = row['cf']
+    tmp = xr.open_dataset(sample_h1)
 
-        if c != 'intrinsic':
-            c = float(c)
+    nx = len(tmp.pfts1d_lat)
+    pfts1d_area = np.zeros(nx)
+    for i,lat,lon in zip(range(nx),tmp.pfts1d_lat,tmp.pfts1d_lon):
+        ixlat = abs(lat-tmp.grid1d_lat)<0.1
+        ixlon = abs(lon-tmp.grid1d_lon)<0.1
+        ix    = (ixlat)&(ixlon)
+
+        pfts1d_area[i] = la[ix]
+
+    lapft = pfts1d_area*tmp.pfts1d_wtgcell
+    lapft.name = 'patch area'
+    lapft.attrs['long_name'] = 'pft patch area, within the sparsegrid'
+    lapft.attrs['units'] = 'km2'
+    return lapft
+
+def get_cfs(attrs,datavar):
+    if datavar in attrs.index:
+        cf1   = attrs.cf1[datavar]
+        cf2   = attrs.cf2[datavar]
+        if cf2=='1/lasum':
+            cf2 = 1/la.sum()
+        else:
+            cf2 = float(cf2)
+        units = attrs.units[datavar]
+    else:
+        cf1   = 1/365
+        cf2   = 1/la.sum()
+        if datavar in ds:
+            units = ds[datavar].attrs['units']
+        else:
+            units = 'tbd'
+    return cf1,cf2,units
+
+def calc_mean(ens_name,datavar,la,attrs,ds0,domain='global',overwrite=False):
+    '''
+    Calculate the annual mean for given datavar across the ensemble.
+        ens_name, one of CTL2010,AF1855,AF2095,C285,C867,NDEP
+        datavar, e.g. GPP
+        domain, one of global,biome,pft
+        overwrite, option to rewrite existing saved data
+    returns xmean,xiav
+    '''
+    preload = ('/glade/u/home/djk2120/clm5ppe/pyth/data/'+
+               ens_name+'_'+datavar+'_'+domain+'.nc')
+    if not glob.glob(preload):
+        preload = './data/'+ens_name+'_'+datavar+'_'+domain+'.nc'
+        if not os.path.isdir('./data/'):
+            os.system('mkdir data')
+    if overwrite:
+        os.system('rm '+preload)
+    
+    #only calculate if not available on disk
+    if not glob.glob(preload):
+        longname=''
+        specials = ['ALTMAX','SCA_JJA','SCA_DJF']
         
-        cfs[f]   = c
-        units[f] = u
-    return cfs,units
+        if datavar not in specials:
+            
+            if domain=='pft':
+                xmean,xiav,longname,units=pft_mean(ens_name,datavar,la,attrs)    
+            
+            if domain=='biome':
+                xmean,xiav,longname,units=biome_mean(ens_name,datavar,la,attrs) 
+            
+            if domain=='global':
+                xmean,xiav,longname,units=gcell_mean(ens_name,datavar,la,attrs) 
+ 
+        else:
+            xmean,xiav,longname = calc_special(ens_name,datavar,la)
+        
+        #save the reduced data
+        out = xr.Dataset()
+        out[datavar+'_mean'] = xmean
+        out[datavar+'_mean'].attrs= {'units':units,'long_name':longname}
+        out[datavar+'_iav']  = xiav
+        out[datavar+'_iav'].attrs= {'units':units,'long_name':longname}
+        out['param']  = ds0.param
+        out['minmax'] = ds0.minmax
+        if domain=='biome':
+            out['biome_name']=ds0.biome_name
+        if domain=='pft':
+            pftkeys=['NV','NEMT','NEBT','NDBT','BETT','BEMT','BDTT','BDMT','BDBT',
+                     'BES','BDMS','BDBS','C3AG','C3NG','C4G','C3C','C3I']
+            out['pftkey']=xr.DataArray(pftkeys,dims='pft')
+        out.load().to_netcdf(preload)
+
+    #load from disk
+    ds  = xr.open_dataset(preload)
+    v   = datavar+'_iav'
+    xmean   = ds[datavar+'_mean']
+    if v in ds.data_vars:
+        xiav = ds[v]
+    else:
+        xiav = []
+    
+    return xmean,xiav
+
+def gcell_mean(ens,datavar,la,attrs):
+
+    files = get_files(ens,'h0',keys)
+    dvs   = datavar.split('-')
+    ds    = get_ensemble(files,dvs,keys,paramkey)
+    
+    cf1,cf2,units = get_cfs(attrs,datavar)
+          
+    x = ds[dvs[0]]
+    if len(dvs)==2:
+        ix = ds[dvs[1]]>0
+        x  = (x/ds[dvs[1]]).where(ix).fillna(0)
+        
+    xann      = cf1*(month_wts(10)*x).groupby('time.year').sum()
+    xann_glob = cf2*(la*xann).sum(dim='gridcell').compute()
+    xmean     = xann_glob.mean(dim='year')
+    xiav      = xann_glob.std(dim='year')
+    longname  = ds[dvs[0]].attrs['long_name']
+    return xmean,xiav,longname,units
+
+def biome_mean(ens,datavar,la,attrs):
+    files = get_files(ens,'h0',keys)
+    dvs   = datavar.split('-')
+    ds    = get_ensemble(files,dvs,keys,paramkey)
+    
+    cf1,cf2,units = get_cfs(attrs,datavar)
+    
+    x = ds[dvs[0]]
+    if len(dvs)==2:
+        ix = ds[dvs[1]]>0
+        x  = (x/ds[dvs[1]]).where(ix).fillna(0)
+
+    xann       = cf1*(month_wts(10)*x).groupby('time.year').sum()
+    xann_biome = cf2*(la*xann).groupby(ds.biome).sum().compute()
+    xmean      = xann_biome.mean(dim='year')
+    xiav       = xann_biome.std(dim='year')
+    longname   = ds[dvs[0]].attrs['long_name']
+
+    return xmean,xiav,longname,units
+
+def pft_mean(ens,datavar,la,attrs):
+    files = get_files(ens,'h1',keys)
+    dvs   = datavar.split('-')
+    ds    = get_ensemble(files,dvs,keys,paramkey)
+    
+    cf1,cf2,units = get_cfs(attrs,datavar)
+    lapft = get_lapft(la,files[0])
+    
+    x = ds[dvs[0]]
+    if len(dvs)==2:
+        ix = ds[dvs[1]]>0
+        x  = (x/ds[dvs[1]]).where(ix).fillna(0)
+
+    xann           = cf1*(month_wts(10)*x).groupby('time.year').sum()
+    la_xann        = (lapft*xann)
+    la_xann['pft'] = ds.pfts1d_itype_veg
+    xann_pft       = cf2*(la_xann).groupby('pft').sum().compute()
+    xmean          = xann_pft.mean(dim='year')
+    xiav           = xann_pft.std(dim='year')
+    longname       = ds[dvs[0]].attrs['long_name']
+
+    return xmean,xiav,longname,units
 
 def find_pair(da,params,minmax,p):
     '''
