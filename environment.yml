@@ -23,10 +23,11 @@ dependencies:
     - pandas        # Labeled array library
     - scipy         # Common math/stats/science functions
     - scikit-learn  # Macine learning library
+    - scikit-optimize
     - seaborn       # Statistical visualizations
     - shapely
     - six           # Python 2/3 compatibility
     - sparse
     - tqdm          # Nice progressbar for longer computations
-    - xarray        # N-d labeled array library
+    - xarray=0.19.0        # N-d labeled array library
     - xesmf
