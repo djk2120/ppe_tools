@@ -7,6 +7,13 @@ import matplotlib
 import matplotlib.pyplot as plt
 import glob
 
+#define the directory structure to find files
+def get_files(name,htape,keys):
+    topdir     = '/glade/scratch/djk2120/PPEn11/hist/' 
+    thisdir    = topdir+name+'/'
+    files      = [glob.glob(thisdir+'*'+key+'*'+htape+'*.nc')[0] for key in keys]
+    return files
+
 def get_ensemble(files,data_vars,keys,paramkey,p=True,extras=[]):
 
     def preprocess(ds):
@@ -139,7 +146,7 @@ def get_lapft(la,sample_h1):
     lapft.attrs['units'] = 'km2'
     return lapft
 
-def get_cfs(attrs,datavar):
+def get_cfs(attrs,datavar,ds):
     if datavar in attrs.index:
         cf1   = attrs.cf1[datavar]
         cf2   = attrs.cf2[datavar]
@@ -227,7 +234,7 @@ def gcell_mean(ens,datavar,la,attrs):
     dvs   = datavar.split('-')
     ds    = get_ensemble(files,dvs,keys,paramkey)
     
-    cf1,cf2,units = get_cfs(attrs,datavar)
+    cf1,cf2,units = get_cfs(attrs,datavar,ds)
           
     x = ds[dvs[0]]
     if len(dvs)==2:
@@ -246,7 +253,7 @@ def biome_mean(ens,datavar,la,attrs):
     dvs   = datavar.split('-')
     ds    = get_ensemble(files,dvs,keys,paramkey)
     
-    cf1,cf2,units = get_cfs(attrs,datavar)
+    cf1,cf2,units = get_cfs(attrs,datavar,ds)
     
     x = ds[dvs[0]]
     if len(dvs)==2:
@@ -266,7 +273,7 @@ def pft_mean(ens,datavar,la,attrs):
     dvs   = datavar.split('-')
     ds    = get_ensemble(files,dvs,keys,paramkey)
     
-    cf1,cf2,units = get_cfs(attrs,datavar)
+    cf1,cf2,units = get_cfs(attrs,datavar,ds)
     lapft = get_lapft(la,files[0])
     
     x = ds[dvs[0]]
