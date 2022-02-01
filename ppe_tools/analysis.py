@@ -164,7 +164,7 @@ def get_cfs(attrs,datavar,ds):
             units = 'tbd'
     return cf1,cf2,units
 
-def calc_mean(ens_name,datavar,la,attrs,ds0,domain='global',overwrite=False):
+def calc_mean(ens_name,datavar,la,attrs,ds0,keys,paramkey,domain,overwrite=False):
     '''
     Calculate the annual mean for given datavar across the ensemble.
         ens_name, one of CTL2010,AF1855,AF2095,C285,C867,NDEP
@@ -190,16 +190,16 @@ def calc_mean(ens_name,datavar,la,attrs,ds0,domain='global',overwrite=False):
         if datavar not in specials:
             
             if domain=='pft':
-                xmean,xiav,longname,units=pft_mean(ens_name,datavar,la,attrs)    
+                xmean,xiav,longname,units=pft_mean(ens_name,datavar,la,attrs,keys,paramkey)    
             
             if domain=='biome':
-                xmean,xiav,longname,units=biome_mean(ens_name,datavar,la,attrs) 
+                xmean,xiav,longname,units=biome_mean(ens_name,datavar,la,attrs,keys,paramkey) 
             
             if domain=='global':
-                xmean,xiav,longname,units=gcell_mean(ens_name,datavar,la,attrs) 
+                xmean,xiav,longname,units=gcell_mean(ens_name,datavar,la,attrs,keys,paramkey) 
  
         else:
-            xmean,xiav,longname = calc_special(ens_name,datavar,la)
+            xmean,xiav,longname = calc_special(ens_name,datavar,la) # where is this function defined?
         
         #save the reduced data
         out = xr.Dataset()
@@ -228,7 +228,7 @@ def calc_mean(ens_name,datavar,la,attrs,ds0,domain='global',overwrite=False):
     
     return xmean,xiav
 
-def gcell_mean(ens,datavar,la,attrs):
+def gcell_mean(ens,datavar,la,attrs,keys,paramkey):
 
     files = get_files(ens,'h0',keys)
     dvs   = datavar.split('-')
@@ -248,7 +248,7 @@ def gcell_mean(ens,datavar,la,attrs):
     longname  = ds[dvs[0]].attrs['long_name']
     return xmean,xiav,longname,units
 
-def biome_mean(ens,datavar,la,attrs):
+def biome_mean(ens,datavar,la,attrs,keys,paramkey):
     files = get_files(ens,'h0',keys)
     dvs   = datavar.split('-')
     ds    = get_ensemble(files,dvs,keys,paramkey)
@@ -268,7 +268,7 @@ def biome_mean(ens,datavar,la,attrs):
 
     return xmean,xiav,longname,units
 
-def pft_mean(ens,datavar,la,attrs):
+def pft_mean(ens,datavar,la,attrs,keys,paramkey):
     files = get_files(ens,'h1',keys)
     dvs   = datavar.split('-')
     ds    = get_ensemble(files,dvs,keys,paramkey)
