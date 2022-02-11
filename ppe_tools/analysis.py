@@ -9,14 +9,12 @@ import glob
 
 #define the directory structure to find files
 def get_files(name,htape,keys):
-
-    topdir     = '/glade/campaign/asp/djk2120/PPEn11/hist/'
+    topdir     = '/glade/scratch/djk2120/PPEn11/hist/' 
     thisdir    = topdir+name+'/'
     files      = [glob.glob(thisdir+'*'+key+'*'+htape+'*.nc')[0] for key in keys]
     return files
 
 def ppe_init(csv='/glade/scratch/djk2120/PPEn11/surv.csv'):
-    
     paramkey = pd.read_csv(csv)
     keys = paramkey.key
 
@@ -191,17 +189,18 @@ def get_cfs(attrs,datavar,ds,la):
             units = 'tbd'
     return cf1,cf2,units
 
-def calc_mean(ens_name,datavar,domain='global',overwrite=False):
+def calc_mean(ens_name,datavar,domain='global',overwrite=False,
+              csv='/glade/scratch/djk2120/PPEn11/surv.csv'):
     '''
     Calculate the annual mean for given datavar across the ensemble.
-        ens_name, one of CTL2010,CTL2010SP,AF1855,AF2095,C285,C867,NDEP
+        ens_name, one of CTL2010,AF1855,AF2095,C285,C867,NDEP
         datavar, e.g. GPP
         domain, one of global,biome,pft
         overwrite, option to rewrite existing saved data
     returns xmean,xiav
     '''
     
-    ds0,la,attrs,paramkey,keys = ppe_init()
+    ds0,la,attrs,paramkey,keys = ppe_init(csv=csv)
     
     preload = ('/glade/u/home/djk2120/clm5ppe/pyth/data/'+
                ens_name+'_'+datavar+'_'+domain+'.nc')
