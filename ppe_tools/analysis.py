@@ -9,10 +9,35 @@ import glob
 
 #define the directory structure to find files
 def get_files(name,htape,keys):
-    topdir     = '/glade/scratch/djk2120/PPEn11/hist/' 
+
+    topdir     = '/glade/campaign/asp/djk2120/PPEn11/hist/'
     thisdir    = topdir+name+'/'
     files      = [glob.glob(thisdir+'*'+key+'*'+htape+'*.nc')[0] for key in keys]
     return files
+
+def ppe_init(csv='/glade/scratch/djk2120/PPEn11/surv.csv'):
+    
+    paramkey = pd.read_csv(csv)
+    keys = paramkey.key
+
+    #fetch the sparsegrid landarea
+    la_file = '/glade/scratch/djk2120/PPEn08/sparsegrid_landarea.nc'
+    la = xr.open_dataset(la_file).landarea  #km2
+
+    #load conversion factors
+    attrs = pd.read_csv('agg_units.csv',index_col=0)
+
+    #dummy dataset
+    p,m = get_params(keys,paramkey)
+    ds0 = xr.Dataset()
+    ds0['param']  =xr.DataArray(p,dims='ens')
+    ds0['minmax'] =xr.DataArray(m,dims='ens')
+    ds0['key']    =xr.DataArray(keys,dims='ens')
+    whit = xr.open_dataset('./whit/whitkey.nc')
+    ds0['biome']      = whit['biome']
+    ds0['biome_name'] = whit['biome_name']
+    
+    return ds0,la,attrs,paramkey,keys
 
 def get_ensemble(files,data_vars,keys,paramkey,p=True,extras=[]):
 
@@ -58,6 +83,8 @@ def get_ensemble(files,data_vars,keys,paramkey,p=True,extras=[]):
     ds['biome_name'] = whit['biome_name']
 
     return ds
+
+
 
 def get_map(da):
     '''
@@ -146,7 +173,7 @@ def get_lapft(la,sample_h1):
     lapft.attrs['units'] = 'km2'
     return lapft
 
-def get_cfs(attrs,datavar,ds):
+def get_cfs(attrs,datavar,ds,la):
     if datavar in attrs.index:
         cf1   = attrs.cf1[datavar]
         cf2   = attrs.cf2[datavar]
@@ -164,15 +191,18 @@ def get_cfs(attrs,datavar,ds):
             units = 'tbd'
     return cf1,cf2,units
 
-def calc_mean(ens_name,datavar,la,attrs,ds0,domain='global',overwrite=False):
+def calc_mean(ens_name,datavar,domain='global',overwrite=False):
     '''
     Calculate the annual mean for given datavar across the ensemble.
-        ens_name, one of CTL2010,AF1855,AF2095,C285,C867,NDEP
+        ens_name, one of CTL2010,CTL2010SP,AF1855,AF2095,C285,C867,NDEP
         datavar, e.g. GPP
         domain, one of global,biome,pft
         overwrite, option to rewrite existing saved data
     returns xmean,xiav
     '''
+    
+    ds0,la,attrs,paramkey,keys = ppe_init()
+    
     preload = ('/glade/u/home/djk2120/clm5ppe/pyth/data/'+
                ens_name+'_'+datavar+'_'+domain+'.nc')
     if not glob.glob(preload):
@@ -190,13 +220,13 @@ def calc_mean(ens_name,datavar,la,attrs,ds0,domain='global',overwrite=False):
         if datavar not in specials:
             
             if domain=='pft':
-                xmean,xiav,longname,units=pft_mean(ens_name,datavar,la,attrs)    
+                xmean,xiav,longname,units=pft_mean(ens_name,datavar,la,attrs,keys,paramkey)    
             
             if domain=='biome':
-                xmean,xiav,longname,units=biome_mean(ens_name,datavar,la,attrs) 
+                xmean,xiav,longname,units=biome_mean(ens_name,datavar,la,attrs,keys,paramkey) 
             
             if domain=='global':
-                xmean,xiav,longname,units=gcell_mean(ens_name,datavar,la,attrs) 
+                xmean,xiav,longname,units=gcell_mean(ens_name,datavar,la,attrs,keys,paramkey) 
  
         else:
             xmean,xiav,longname = calc_special(ens_name,datavar,la)
@@ -228,13 +258,13 @@ def calc_mean(ens_name,datavar,la,attrs,ds0,domain='global',overwrite=False):
     
     return xmean,xiav
 
-def gcell_mean(ens,datavar,la,attrs):
+def gcell_mean(ens,datavar,la,attrs,keys,paramkey):
 
     files = get_files(ens,'h0',keys)
     dvs   = datavar.split('-')
     ds    = get_ensemble(files,dvs,keys,paramkey)
     
-    cf1,cf2,units = get_cfs(attrs,datavar,ds)
+    cf1,cf2,units = get_cfs(attrs,datavar,ds,la)
           
     x = ds[dvs[0]]
     if len(dvs)==2:
@@ -248,12 +278,12 @@ def gcell_mean(ens,datavar,la,attrs):
     longname  = ds[dvs[0]].attrs['long_name']
     return xmean,xiav,longname,units
 
-def biome_mean(ens,datavar,la,attrs):
+def biome_mean(ens,datavar,la,attrs,keys,paramkey):
     files = get_files(ens,'h0',keys)
     dvs   = datavar.split('-')
     ds    = get_ensemble(files,dvs,keys,paramkey)
     
-    cf1,cf2,units = get_cfs(attrs,datavar,ds)
+    cf1,cf2,units = get_cfs(attrs,datavar,ds,la)
     
     x = ds[dvs[0]]
     if len(dvs)==2:
@@ -268,12 +298,12 @@ def biome_mean(ens,datavar,la,attrs):
 
     return xmean,xiav,longname,units
 
-def pft_mean(ens,datavar,la,attrs):
+def pft_mean(ens,datavar,la,attrs,keys,paramkey):
     files = get_files(ens,'h1',keys)
     dvs   = datavar.split('-')
     ds    = get_ensemble(files,dvs,keys,paramkey)
     
-    cf1,cf2,units = get_cfs(attrs,datavar,ds)
+    cf1,cf2,units = get_cfs(attrs,datavar,ds,la)
     lapft = get_lapft(la,files[0])
     
     x = ds[dvs[0]]
