@@ -3,11 +3,13 @@ class ParamInfo(object):
     Stores parameter information.
     """
     
-    def __init__(self, name, loc, defval=None, value=None):
+    def __init__(self, name, loc, defval=None, value=None, lhc=None, flag=None):
         self._name = name # parameter name
         self._default = defval # default value
         self._value = value # actual value to be used in a given ensemble member
         self._location = loc # location of parameter (params file or namelist)
+        self._lhc = lhc
+        self._flag = flag
 
     @property
     def name(self):
@@ -25,6 +27,14 @@ class ParamInfo(object):
     def location(self):
         return self._location
     
+    @property
+    def lhc(self):
+        return self._lhc
+    
+    @property
+    def flag(self):
+        return self._flag
+    
     @name.setter
     def name(self, new_name):
         self._name = new_name
@@ -38,4 +48,4 @@ class ParamInfo(object):
         self._value = new_val
             
     def __repr__(self):
-        return "%s:\n\tloc = %s\n\tdefault = %s\n\tvalue = %s" % (self.name, self.location, self.default, self.value)
+        return "%s:\n\tloc = %s\n\tdefault = %s\n\tvalue = %s\n\tlhc_sample = %s\n\tflag = %s" % (self.name, self.location, self.default, self.value, self.lhc, self.flag)
