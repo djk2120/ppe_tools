@@ -1,8 +1,11 @@
-# ppe_tools
-tools for creating and analyzing parameter perturbation experiments
+# Tower PPE
 
-### To use our python environment:
+a branch of ppe_tools for a PPE at a subset of ameriflux towers
 
-conda env create -f environment.yml
+### varying 20 params
 
-Then you should hopefully have ppe-py available as an environment in JupyterHub
+controlling surface fluxes and hydrology, spreadsheet [online](https://docs.google.com/spreadsheets/d/1vR0FlW9cKgvPaQb2Qmr0MSIoyUSqmdxa3kOxSVsxyDI/edit?usp=sharing)
+
+
+
+
