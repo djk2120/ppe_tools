@@ -7,64 +7,62 @@ fi
 
 #set up environment variables
 source $1
+joblist='tethered.txt'
 
-#loop through paramlist
 while read p; do
-  #create the new case name
-  repcase=$casePrefix"_"$p
+    for i in "${!cases[@]}"; do
+	case="${cases[i]}"
+	exeroot="${exeroots[i]}"
+	basecase=$SCRIPTS$ensemble"/basecases/"$case
+	thiscase=$SCRIPTS$ensemble"/"$case"/"$case"_"$p
+	
+	#clone case
+	cd $SCRIPTS
+	./create_clone --case $thiscase --clone $basecase
+	
+	#setup, point to executable
+	cd $thiscase
+	./case.setup
+	./xmlchange BUILD_COMPLETE=TRUE
+	./xmlchange EXEROOT=$exeroot
+	./xmlchange DOUT_S=FALSE
+	
+	#comment out previous paramfile from user_nl_clm
+	:> user_nl_clm.tmp
+	while read line; do
+	    if [[ $line != *"paramfile"* ]]; then
+		echo $line>>user_nl_clm.tmp
+	    else
+		echo '!'$line>>user_nl_clm.tmp
+	    fi
+	done<user_nl_clm
+	mv user_nl_clm.tmp user_nl_clm
+	
+	#append correct paramfile
+	pfile=$PARAMS$p".nc"
+	pfilestr="paramfile = '"$pfile"'"
+	echo -e "\n"$pfilestr >> user_nl_clm
+	
+	# cat nlmods if needed
+	if [ "$nlmodsFlag" = true ]
+	then
+	    nlmods=$NLMODS$p".txt"
+	    cat $nlmods >> user_nl_clm
+	fi
 
-  #clone case
-  echo "--------------------------------------------"
-  echo "   creating "$repcase
-  echo "--------------------------------------------" 
-  cd $SCRIPTS_DIR
-  ./create_clone --case $caseDir$repcase --clone $basecase
-  cd $caseDir$repcase
+	#set up job tethering
+	if (( i == 0 )); then
+	    firstcase=$thiscase
+	    :> $joblist  #empty file
+	else
+	    cd $firstcase
+	    echo $thiscase >> $joblist
+	fi
+    done
 
-  #setup and point to executable
-  ./case.setup
-  if [ "$exerootFlag" = true ]
-  then
-      ./xmlchange BUILD_COMPLETE=TRUE
-      ./xmlchange EXEROOT=$exeroot
-  else
-      echo "--------------------------------------------"
-      echo "   building "$repcase
-      echo "--------------------------------------------" 
-      ./case.build
-  fi
+    #submit job, with next jobs tethered via PBS afterok
+    cd $PPE
+    prevcase="none"
+    bash tether.sh $prevcase $SCRATCH $firstcase $joblist $template
 
-  #temp, adjust project
-  ./xmlchange PROJECT="P08010000"
-
-
-  # copy user_nl_clm and specify paramfile
-  cp $nlbase user_nl_clm
-  pfile=$PARAMS_DIR$p".nc"
-  pfilestr="paramfile = '"$pfile"'"
-  echo -e "\n"$pfilestr >> user_nl_clm
-
-  # specify finidat if needed
-  if [ "$finidatFlag" = true ]
-  then
-      rfile=$RESTARTS$prevCase"_"$p*".nc"
-      rfile=$(echo $rfile) #force wildcard expansion
-      rfilestr="finidat ='"$rfile"'"
-      echo $rfilestr >> user_nl_clm
-  fi
-  
-  # cat nlmods if needed
-  if [ "$nlmodsFlag" = true ]
-  then
-      nlmods=$NLMODS_DIR$p".txt"
-      cat $nlmods >> user_nl_clm
-  fi
-  
-  echo "--------------------------------------------"
-  echo "   submitting "$repcase
-  echo "--------------------------------------------" 
-  ./case.submit
-
-
-  
-done <$paramList
+done<$paramList
