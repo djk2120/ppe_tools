@@ -115,8 +115,8 @@ def get_map(da):
     array = np.zeros(newshape)+np.nan
     nd    = len(array.shape)
     
-    #FILL the array #zqz, very brittle
-    ds = xr.open_dataset('/glade/scratch/djk2120/PPEn11/CTL2010/hist/PPEn08_CTL2010_OAAT0160.clm2.h0.2005-02-01-00000.nc')
+    #FILL the array
+    ds = xr.open_dataset('/glade/scratch/djk2120/PPEn11/hist/CTL2010/PPEn11_CTL2010_OAAT0399.clm2.h0.2005-02-01-00000.nc')
     for i in range(400):
         lat=ds.grid1d_lat[i]
         lon=ds.grid1d_lon[i]
