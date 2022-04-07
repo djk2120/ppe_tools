@@ -1,0 +1,103 @@
+/glade/work/oleson/PPE.n08_ctsm5.1.dev023/cime/scripts/ctsm51c6_PPEn08ctsm51d023_2deg_GSWP3V1_Sparse400_2000_step4
+/glade/work/djk2120/PPEn08/cime/scripts
+basecase=/glade/work/oleson/PPE.n08_ctsm5.1.dev023/cime/scripts/ctsm51c6_PPEn08ctsm51d023_2deg_GSWP3V1_Sparse400_2000_step4
+nextcase=CTL2010/basecases/PPEn08_CTL2010_postSASU
+ case  CIMEROOT is /glade/work/djk2120/PPEn08/cime 
+ clone CIMEROOT is /glade/work/oleson/PPE.n08_ctsm5.1.dev023/cime 
+ It is NOT recommended to clone cases from different versions of CIME.
+ Successfully created new case PPEn08_CTL2010_postSASU from clone case ctsm51c6_PPEn08ctsm51d023_2deg_GSWP3V1_Sparse400_2000_step4 
+Setting Environment OMP_STACKSIZE=1024M
+Setting Environment TMPDIR=/glade/scratch/djk2120
+Setting Environment MPI_TYPE_DEPTH=16
+Setting Environment MPI_IB_CONGESTED=1
+Setting resource.RLIMIT_STACK to -1 from (307200000, -1)
+/glade/work/djk2120/PPEn08/cime/scripts/CTL2010/basecases/PPEn08_CTL2010_postSASU/env_mach_specific.xml already exists, delete to replace
+/glade/work/djk2120/PPEn08/cime/scripts/CTL2010/basecases/PPEn08_CTL2010_postSASU/env_mach_specific.xml already exists, delete to replace
+job is case.run USER_REQUESTED_WALLTIME None USER_REQUESTED_QUEUE None WALLTIME_FORMAT %H:%M:%S
+Creating batch scripts
+Writing case.run script from input template /glade/work/oleson/PPE.n08_ctsm5.1.dev023/cime/config/cesm/machines/template.case.run
+Creating file .case.run
+Writing case.st_archive script from input template /glade/work/oleson/PPE.n08_ctsm5.1.dev023/cime/config/cesm/machines/template.st_archive
+Creating file case.st_archive
+If an old case build already exists, might want to run 'case.build --clean' before building
+You can now run './preview_run' to get more info on how your case will be run
+Setting Environment OMP_STACKSIZE=1024M
+Setting Environment TMPDIR=/glade/scratch/djk2120
+Setting Environment MPI_TYPE_DEPTH=16
+Setting Environment MPI_IB_CONGESTED=1
+Setting resource.RLIMIT_STACK to -1 from (307200000, -1)
+Machine/Decomp/Pes configuration has already been done ...skipping
+If an old case build already exists, might want to run 'case.build --clean' before building
+You can now run './preview_run' to get more info on how your case will be run
+Building case in directory /glade/work/djk2120/PPEn08/cime/scripts/CTL2010/basecases/PPEn08_CTL2010_postSASU
+sharedlib_only is False
+model_only is False
+Setting Environment OMP_STACKSIZE=1024M
+Setting Environment TMPDIR=/glade/scratch/djk2120
+Setting Environment MPI_TYPE_DEPTH=16
+Setting Environment MPI_IB_CONGESTED=1
+Setting resource.RLIMIT_STACK to -1 from (307200000, -1)
+Generating component namelists as part of build
+Creating component namelists
+  2021-04-20 06:29:23 atm 
+   Calling /glade/work/djk2120/PPEn08/cime/src/components/data_comps_mct/datm/cime_config/buildnml
+  2021-04-20 06:29:23 lnd 
+   Calling /glade/work/djk2120/PPEn08/cime/../cime_config/buildnml
+  2021-04-20 06:29:23 ice 
+   Calling /glade/work/djk2120/PPEn08/cime/src/components/stub_comps_mct/sice/cime_config/buildnml
+  2021-04-20 06:29:23 ocn 
+   Calling /glade/work/djk2120/PPEn08/cime/src/components/stub_comps_mct/socn/cime_config/buildnml
+  2021-04-20 06:29:23 rof 
+   Calling /glade/work/djk2120/PPEn08/cime/src/components/stub_comps_mct/srof/cime_config/buildnml
+  2021-04-20 06:29:23 glc 
+   Calling /glade/work/djk2120/PPEn08/cime/src/components/stub_comps_mct/sglc/cime_config/buildnml
+  2021-04-20 06:29:23 wav 
+   Calling /glade/work/djk2120/PPEn08/cime/src/components/stub_comps_mct/swav/cime_config/buildnml
+  2021-04-20 06:29:23 iac 
+   Running /glade/work/djk2120/PPEn08/cime/src/components/stub_comps_mct/siac/cime_config/buildnml 
+  2021-04-20 06:29:23 esp 
+   Calling /glade/work/djk2120/PPEn08/cime/src/components/stub_comps_mct/sesp/cime_config/buildnml
+  2021-04-20 06:29:23 cpl 
+   Calling /glade/work/djk2120/PPEn08/cime/src/drivers/mct/cime_config/buildnml
+Building gptl with output to file /glade/scratch/djk2120/PPEn08_CTL2010_postSASU/bld/gptl.bldlog.210420-062922
+   Calling /glade/work/djk2120/PPEn08/cime/src/build_scripts/buildlib.gptl
+Building mct with output to file /glade/scratch/djk2120/PPEn08_CTL2010_postSASU/bld/mct.bldlog.210420-062922
+   Calling /glade/work/djk2120/PPEn08/cime/src/build_scripts/buildlib.mct
+Building pio with output to file /glade/scratch/djk2120/PPEn08_CTL2010_postSASU/bld/pio.bldlog.210420-062922
+   Calling /glade/work/djk2120/PPEn08/cime/src/build_scripts/buildlib.pio
+Component pio build complete with 2 warnings
+Building csm_share with output to file /glade/scratch/djk2120/PPEn08_CTL2010_postSASU/bld/csm_share.bldlog.210420-062922
+   Calling /glade/work/djk2120/PPEn08/cime/src/build_scripts/buildlib.csm_share
+Component csm_share build complete with 20 warnings
+         - Building clm library 
+Building lnd with output to /glade/scratch/djk2120/PPEn08_CTL2010_postSASU/bld/lnd.bldlog.210420-062922
+Component lnd build complete with 11 warnings
+clm built in 173.373592 seconds
+         - Building atm Library 
+Building atm with output to /glade/scratch/djk2120/PPEn08_CTL2010_postSASU/bld/atm.bldlog.210420-062922
+         - Building ice Library 
+Building ice with output to /glade/scratch/djk2120/PPEn08_CTL2010_postSASU/bld/ice.bldlog.210420-062922
+         - Building ocn Library 
+Building ocn with output to /glade/scratch/djk2120/PPEn08_CTL2010_postSASU/bld/ocn.bldlog.210420-062922
+         - Building rof Library 
+Building rof with output to /glade/scratch/djk2120/PPEn08_CTL2010_postSASU/bld/rof.bldlog.210420-062922
+         - Building glc Library 
+Building glc with output to /glade/scratch/djk2120/PPEn08_CTL2010_postSASU/bld/glc.bldlog.210420-062922
+         - Building wav Library 
+Building wav with output to /glade/scratch/djk2120/PPEn08_CTL2010_postSASU/bld/wav.bldlog.210420-062922
+         - Building iac Library 
+Building iac with output to /glade/scratch/djk2120/PPEn08_CTL2010_postSASU/bld/iac.bldlog.210420-062922
+         - Building esp Library 
+Building esp with output to /glade/scratch/djk2120/PPEn08_CTL2010_postSASU/bld/esp.bldlog.210420-062922
+sice built in 0.770513 seconds
+sesp built in 0.751820 seconds
+siac built in 0.760852 seconds
+swav built in 0.767796 seconds
+socn built in 0.783751 seconds
+sglc built in 0.788747 seconds
+srof built in 0.809243 seconds
+datm built in 3.198890 seconds
+Building cesm from /glade/work/djk2120/PPEn08/cime/src/drivers/mct/cime_config/buildexe with output to /glade/scratch/djk2120/PPEn08_CTL2010_postSASU/bld/cesm.bldlog.210420-062922 
+Time spent not building: 1.803884 sec
+Time spent building: 321.485831 sec
+MODEL BUILD HAS FINISHED SUCCESSFULLY
