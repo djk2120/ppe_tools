@@ -9,17 +9,49 @@ import glob
 
 #define the directory structure to find files
 def get_files(name,htape,keys):
-    topdir     = '/glade/scratch/djk2120/PPEn11/hist/' 
-    thisdir    = topdir+name+'/'
+    topdir     = '/glade/campaign/asp/djk2120/PPEn11/' 
+    thisdir    = topdir+name+'/hist/'
     files      = [glob.glob(thisdir+'*'+key+'*'+htape+'*.nc')[0] for key in keys]
     return files
 
-def get_ensemble(files,data_vars,keys,paramkey,p=True,extras=[]):
+def ppe_init(csv='/glade/scratch/djk2120/PPEn11/surv.csv'):
+    paramkey = pd.read_csv(csv)
+    keys = paramkey.key
+
+    #fetch the sparsegrid landarea
+    la_file = '/glade/scratch/djk2120/PPEn08/sparsegrid_landarea.nc'
+    la = xr.open_dataset(la_file).landarea  #km2
+    # pft area
+    f = get_files('CTL2010','h1',keys[0])[0]
+    lapft = get_lapft(la,f)
+    
+    
+    #load conversion factors
+    attrs = pd.read_csv('agg_units.csv',index_col=0)
+
+    #dummy dataset
+    p,m = get_params(keys,paramkey)
+    ds0 = xr.Dataset()
+    ds0['param']  =xr.DataArray(p,dims='ens')
+    ds0['minmax'] =xr.DataArray(m,dims='ens')
+    ds0['key']    =xr.DataArray(keys,dims='ens')
+    whit = xr.open_dataset('./whit/whitkey.nc')
+    ds0['biome']      = whit['biome']
+    ds0['biome_name'] = whit['biome_name']
+    
+    return ds0,la,lapft,attrs,paramkey,keys
+def get_ensemble(data_vars,ensemble,htape,
+                 csv='/glade/scratch/djk2120/PPEn11/surv.csv',
+                 keys=[],paramkey='',p=True,extras=[]):
 
     def preprocess(ds):
         return ds[data_vars]
 
+    if csv:
+        ds0,la,lapft,attrs,paramkey,keys = ppe_init(csv=csv)
+    
     #read in the dataset
+    files = get_files(ensemble,htape,keys)
     ds = xr.open_mfdataset(files,combine='nested',concat_dim='ens',
                            parallel=p,preprocess=preprocess)
 
@@ -56,8 +88,11 @@ def get_ensemble(files,data_vars,keys,paramkey,p=True,extras=[]):
     whit         = xr.open_dataset('./whit/whitkey.nc')
     ds['biome']      = whit['biome']
     ds['biome_name'] = whit['biome_name']
+    if htape=='h1':
+        ds['pft'] = ds.pfts1d_itype_veg
 
     return ds
+
 
 def get_map(da):
     '''
@@ -91,7 +126,8 @@ def get_map(da):
     nd    = len(array.shape)
     
     #FILL the array
-    ds = xr.open_dataset('/glade/scratch/djk2120/PPEn11/hist/CTL2010/PPEn11_CTL2010_OAAT0399.clm2.h0.2005-02-01-00000.nc')
+    f = get_files('CTL2010','h0',['OAAT0000'])[0]
+    ds = xr.open_dataset(f)
     for i in range(400):
         lat=ds.grid1d_lat[i]
         lon=ds.grid1d_lon[i]
@@ -150,146 +186,89 @@ def get_cfs(attrs,datavar,ds):
     if datavar in attrs.index:
         cf1   = attrs.cf1[datavar]
         cf2   = attrs.cf2[datavar]
-        if cf2=='1/lasum':
-            cf2 = 1/la.sum()
-        else:
-            cf2 = float(cf2)
         units = attrs.units[datavar]
     else:
         cf1   = 1/365
-        cf2   = 1/la.sum()
+        cf2   = 0        #flag to use 1/la.sum()
         if datavar in ds:
             units = ds[datavar].attrs['units']
         else:
-            units = 'tbd'
+            units = 'tbd'       
     return cf1,cf2,units
 
-def calc_mean(ens_name,datavar,la,attrs,ds0,keys,paramkey,domain,overwrite=False):
-    '''
-    Calculate the annual mean for given datavar across the ensemble.
-        ens_name, one of CTL2010,AF1855,AF2095,C285,C867,NDEP
-        datavar, e.g. GPP
-        domain, one of global,biome,pft
-        overwrite, option to rewrite existing saved data
-    returns xmean,xiav
-    '''
-    preload = ('/glade/u/home/djk2120/clm5ppe/pyth/data/'+
-               ens_name+'_'+datavar+'_'+domain+'.nc')
+def ann_mean(x,cf=1/365):
+    xann = cf*(month_wts(10)*x).groupby('time.year').sum()
+    return xann
+
+def reg_mean(x,la,cf=0,g=[]):
+    if len(g)==0: #global mean
+        g = la.copy(deep=True)*0+1
+        g.name = 'glob'
+    if cf==0:
+        cf = 1/la.groupby(g).sum()
+    xreg = cf*(la.values*x).groupby(g).sum().compute()
+    if 'glob' in xreg.dims:
+        xreg = xreg.isel(glob=0).drop('glob')
+    return xreg
+
+def calc_mean(datavar,ens,d='global',
+              csv='/glade/scratch/djk2120/PPEn11/surv.csv',
+              overwrite=False,
+              save=True):
+    
+    f = ens+'_'+datavar+'_ann.nc'
+    preload = '/glade/u/home/djk2120/clm5ppe/data/'+f
+    
     if not glob.glob(preload):
-        preload = './data/'+ens_name+'_'+datavar+'_'+domain+'.nc'
-        if not os.path.isdir('./data/'):
-            os.system('mkdir data')
+        preload = '../data/'+f
+
     if overwrite:
         os.system('rm '+preload)
-    
-    #only calculate if not available on disk
-    if not glob.glob(preload):
-        longname=''
-        specials = ['ALTMAX','SCA_JJA','SCA_DJF']
-        
-        if datavar not in specials:
-            
-            if domain=='pft':
-                xmean,xiav,longname,units=pft_mean(ens_name,datavar,la,attrs,keys,paramkey)    
-            
-            if domain=='biome':
-                xmean,xiav,longname,units=biome_mean(ens_name,datavar,la,attrs,keys,paramkey) 
-            
-            if domain=='global':
-                xmean,xiav,longname,units=gcell_mean(ens_name,datavar,la,attrs,keys,paramkey) 
- 
-        else:
-            xmean,xiav,longname = calc_special(ens_name,datavar,la) # where is this function defined?
-        
-        #save the reduced data
-        out = xr.Dataset()
-        out[datavar+'_mean'] = xmean
-        out[datavar+'_mean'].attrs= {'units':units,'long_name':longname}
-        out[datavar+'_iav']  = xiav
-        out[datavar+'_iav'].attrs= {'units':units,'long_name':longname}
-        out['param']  = ds0.param
-        out['minmax'] = ds0.minmax
-        if domain=='biome':
-            out['biome_name']=ds0.biome_name
-        if domain=='pft':
-            pftkeys=['NV','NEMT','NEBT','NDBT','BETT','BEMT','BDTT','BDMT','BDBT',
-                     'BES','BDMS','BDBS','C3AG','C3NG','C4G','C3C','C3I']
-            out['pftkey']=xr.DataArray(pftkeys,dims='pft')
-        out.load().to_netcdf(preload)
-
-    #load from disk
-    ds  = xr.open_dataset(preload)
-    v   = datavar+'_iav'
-    xmean   = ds[datavar+'_mean']
-    if v in ds.data_vars:
-        xiav = ds[v]
+      
+    if glob.glob(preload):
+        xout = xr.open_dataset(preload)
     else:
-        xiav = []
+        ds0,la,lapft,attrs,paramkey,keys = ppe_init(csv=csv)
+        dvs   = datavar.split('-')
+        domains = {'h0':['global','biome'],
+                   'h1':['pft']}
+        xout = xr.Dataset()
+        for htape,la_x in zip(['h0','h1'],[la,lapft]):
+            ds    = get_ensemble(dvs,ens,htape,csv='',keys=keys,paramkey=paramkey)
+            cf1,cf2,units = get_cfs(attrs,datavar,ds)
+            if dvs[0] in ds:
+                x     = ds[dvs[0]]
+                if len(dvs)==2:
+                    ix = ds[dvs[1]]>0
+                    x  = (x/ds[dvs[1]]).where(ix).fillna(0)
+
+                for domain in domains[htape]:
+                    if domain=='global':
+                        g=[]
+                    else:
+                        g=ds[domain]
+
+                    xann     = ann_mean(x,cf1)
+                    xann_reg = reg_mean(xann,la_x,cf2,g)                
+                    v = datavar+'_'+domain
+                    xout[v]=xann_reg
+                
+        xout.attrs={'units':units}
     
-    return xmean,xiav
-
-def gcell_mean(ens,datavar,la,attrs,keys,paramkey):
-
-    files = get_files(ens,'h0',keys)
-    dvs   = datavar.split('-')
-    ds    = get_ensemble(files,dvs,keys,paramkey)
+    if not glob.glob(preload):
+        if save:
+            if not os.path.isdir('../data/'):
+                os.system('mkdir ../data')
+            xout.to_netcdf(preload)
     
-    cf1,cf2,units = get_cfs(attrs,datavar,ds)
-          
-    x = ds[dvs[0]]
-    if len(dvs)==2:
-        ix = ds[dvs[1]]>0
-        x  = (x/ds[dvs[1]]).where(ix).fillna(0)
-        
-    xann      = cf1*(month_wts(10)*x).groupby('time.year').sum()
-    xann_glob = cf2*(la*xann).sum(dim='gridcell').compute()
-    xmean     = xann_glob.mean(dim='year')
-    xiav      = xann_glob.std(dim='year')
-    longname  = ds[dvs[0]].attrs['long_name']
-    return xmean,xiav,longname,units
-
-def biome_mean(ens,datavar,la,attrs,keys,paramkey):
-    files = get_files(ens,'h0',keys)
-    dvs   = datavar.split('-')
-    ds    = get_ensemble(files,dvs,keys,paramkey)
+    #######
+    v = datavar+'_'+d
+    x = xout[v]
+    xm    = x.mean(dim='year')
+    xiav  = x.std(dim='year')
+    units = xout.attrs['units']
     
-    cf1,cf2,units = get_cfs(attrs,datavar,ds)
-    
-    x = ds[dvs[0]]
-    if len(dvs)==2:
-        ix = ds[dvs[1]]>0
-        x  = (x/ds[dvs[1]]).where(ix).fillna(0)
-
-    xann       = cf1*(month_wts(10)*x).groupby('time.year').sum()
-    xann_biome = cf2*(la*xann).groupby(ds.biome).sum().compute()
-    xmean      = xann_biome.mean(dim='year')
-    xiav       = xann_biome.std(dim='year')
-    longname   = ds[dvs[0]].attrs['long_name']
-
-    return xmean,xiav,longname,units
-
-def pft_mean(ens,datavar,la,attrs,keys,paramkey):
-    files = get_files(ens,'h1',keys)
-    dvs   = datavar.split('-')
-    ds    = get_ensemble(files,dvs,keys,paramkey)
-    
-    cf1,cf2,units = get_cfs(attrs,datavar,ds)
-    lapft = get_lapft(la,files[0])
-    
-    x = ds[dvs[0]]
-    if len(dvs)==2:
-        ix = ds[dvs[1]]>0
-        x  = (x/ds[dvs[1]]).where(ix).fillna(0)
-
-    xann           = cf1*(month_wts(10)*x).groupby('time.year').sum()
-    la_xann        = (lapft*xann)
-    la_xann['pft'] = ds.pfts1d_itype_veg
-    xann_pft       = cf2*(la_xann).groupby('pft').sum().compute()
-    xmean          = xann_pft.mean(dim='year')
-    xiav           = xann_pft.std(dim='year')
-    longname       = ds[dvs[0]].attrs['long_name']
-
-    return xmean,xiav,longname,units
+    return xm,xiav,units
 
 def find_pair(da,params,minmax,p):
     '''

@@ -1,10 +1,8 @@
 import os
 import numpy as np
 import xarray as xr
-from skopt.space import Space
-from skopt.sampler import Lhs
 from ppe_tools import Member, ParamInfo
-from ppe_tools.utils import parse_val, get_default, make_paraminfo
+from ppe_tools.utils import parse_val, get_default
 
 class Ensemble(object):
     """
@@ -29,6 +27,9 @@ class Ensemble(object):
 
     def add_member(self,member):
         self._members.append(member)
+        
+    def remove_member(self,member):
+        self._members.remove(member)
 
     def add_mf(self,mf,prefix,nextnum=None):
         ds = xr.open_dataset(self._basefile,decode_times=False)
@@ -91,41 +92,9 @@ class Ensemble(object):
                 else:
                     self.add_member(member)
 
-    def add_lhcs(self,range_info,prefix,nextnum,n_samples):
-        ct = nextnum-1
-        params = [p for p in range_info]
-
-        space = Space([(0.,1.) for p in params])
-        lhs = Lhs(lhs_type="classic", criterion=None)
-        lhc = lhs.generate(space.dimensions, n_samples)
-
-        pfile = xr.open_dataset(self._basefile,decode_times=False)
-
-        for i in range(n_samples):
-            ct+=1
-            paramdict={}
-
-            for s,param in zip(lhc[i],params):
-                
-                if range_info[param]['flagged']:
-                    for r in range_info[param]['flagged']:
-                        rng          = range_info[param]['flagged'][r]
-                        paraminfo    = make_paraminfo(r,s,rng,pfile,self._lndin,flag=param)
-                        paramdict[r] = paraminfo
-                else:
-                    paraminfo = make_paraminfo(param,s,range_info[param],pfile,self._lndin)
-                    paramdict[param] = paraminfo
-
-            pname  = prefix+str(ct).zfill(4)
-            member = Member(pname,paramdict,self._basefile)
-            self.add_member(member)
-    
-
-    
-    
-    def write(self,default_key='',oaatfile='',lhcfile=''):
-        if oaatfile:
-            f = open(oaatfile, "a")
+    def write(self,default_key='',csvfile=''):
+        if csvfile:
+            f = open(csvfile, "a")
             if default_key:
                 output = "%s,%s,%s\n" % (default_key,'default','default')
                 f.write(output)
@@ -137,42 +106,6 @@ class Ensemble(object):
                     output = "%s,%s,%s\n" % (member.name,member.flag,member.minmax)
                 f.write(output)
             f.close()
-        
-        if lhcfile:
-            f = open(lhcfile, "a")
-            
-            #write the file header
-            m = self.members[0]
-            params = [*m.paramdict]
-            f.write('member')
-            flags = []
-            for param in params:
-                flag = m.paramdict[param].flag
-                if flag:
-                    if flag not in flags:
-                        f.write(','+flag)
-                        flags.append(flag)
-                else:
-                    f.write(','+param)
-            f.write('\n')
-
-            #looping through members, write all param weightings
-            for member in self.members:
-                f.write(member.name)
-                params = [*member.paramdict]
-                flags = []
-                for param in params:
-                    flag = member.paramdict[param].flag
-                    s    = str(member.paramdict[param].lhc)
-                    if flag:
-                        if flag not in flags:
-                            f.write(','+s)
-                            flags.append(flag)
-                    else:
-                        f.write(','+s)
-                f.write('\n')
-            f.close()
-        
         if default_key:
             pfile  = self._pdir+default_key+'.nc'
             nlfile = self._ndir+default_key+'.txt'
