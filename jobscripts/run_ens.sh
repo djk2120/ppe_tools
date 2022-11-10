@@ -10,27 +10,31 @@ fi
 source $1
 
 #this file will hold the list of tethered jobs
-joblist='tethered.txt' 
+joblist='joblist.txt' 
 
 #create and submit all the cases
 while read p; do  #loop through paramfiles
-    for i in "${!cases[@]}"; do  #loop through spinup stages
-	case="${cases[i]}"
+
+    echo "CLONING CASES"
+
+    for i in "${!stages[@]}"; do  #loop through spinup stages
+	case="${stages[i]}"
 	exeroot="${exeroots[i]}"
+
 	basecase=$SCRIPTS$ensemble"/basecases/"$case
 	thiscase=$SCRIPTS$ensemble"/"$case"/"$case"_"$p
 	
 	#clone case
 	cd $SCRIPTS
-	./create_clone --case $thiscase --clone $basecase
+	./create_clone --case $thiscase --clone $basecase --keepexe
 	
 	#setup, point to executable
 	cd $thiscase
 	./case.setup
-	./xmlchange BUILD_COMPLETE=TRUE
-	./xmlchange EXEROOT=$exeroot
 	./xmlchange DOUT_S=FALSE
-	
+	./xmlchange PROJECT=$PROJECT
+	./xmlchange JOB_QUEUE=$QUEUE
+
 	#comment out previous paramfile from user_nl_clm
 	:> user_nl_clm.tmp
 	while read line; do
@@ -53,22 +57,33 @@ while read p; do  #loop through paramfiles
 	    nlmods=$NLMODS$p".txt"
 	    cat $nlmods >> user_nl_clm
 	fi
-
-	#set up job tethering
-	if (( i == 0 )); then
-	    firstcase=$thiscase
-	    :> $joblist  #empty file
-	else
-	    cd $firstcase
-	    echo $thiscase >> $joblist
-	fi
     done
 
-    #submit job, with next jobs tethered via PBS afterok
-    cd $PPE
-    prevcase="none"
-    bash tether.sh $prevcase $SCRATCH $firstcase $joblist $template
-    #this is equivalent to ./case.submit of $firstcase 
-    #plus a bit extra to automatically submit any tethered cases
+    #tethering setup
+    case="${cases[0]}"
+    firstcase=$SCRIPTS$ensemble"/"$case"/"$case"_"$p
+    cd $firstcase
+    :> $joblist
+    for i in "${!cases[@]}"; do  #loop through all steps/substeps
+	case="${cases[i]}"
+	casemod="${casemods[i]}"
+	thiscase=$SCRIPTS$ensemble"/"$case"/"$case"_"$p
+	
+	echo -n $case"_"$p >> $joblist
+	echo -n ","$thiscase >> $joblist
+	echo -n ","$casemod >> $joblist
+
+	if [ $i -eq 0 ]; then
+	    echo ",queued" >> $joblist
+	else
+	    echo ",waiting" >> $joblist
+	fi
+
+    done
+
+    # #submit job, with next jobs tethered via PBS afterok
+    bash $tether $joblist $template
+    # #this is equivalent to ./case.submit of $firstcase 
+    # #plus a bit extra to automatically submit any tethered cases
 
 done<$paramList
